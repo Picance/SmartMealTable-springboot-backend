@@ -10,6 +10,12 @@ import com.stcom.smartmealtable.service.dto.MemberDto;
 import com.stcom.smartmealtable.service.dto.TermAgreementRequestDto;
 import com.stcom.smartmealtable.web.argumentresolver.UserContext;
 import com.stcom.smartmealtable.web.dto.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotEmpty;
@@ -32,6 +38,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 인증(로그인, 회원가입) 관련 API.
  */
+@Tag(name = "인증", description = "회원가입, 로그인, 이메일 중복 확인, 약관 동의 관련 API")
 @RestController
 @Slf4j
 @RequiredArgsConstructor
@@ -42,12 +49,34 @@ public class AuthController {
     private final JwtTokenService jwtTokenService;
     private final TermService termService;
 
+    @Operation(
+            summary = "이메일 중복 확인",
+            description = "회원가입 시 이메일 중복 여부를 확인합니다."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "사용 가능한 이메일"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "중복된 이메일 또는 잘못된 형식"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류")
+    })
     @GetMapping("/email/check")
-    public ResponseEntity<ApiResponse<Void>> checkEmail(@Email @RequestParam String email) {
+    public ResponseEntity<ApiResponse<Void>> checkEmail(
+            @Parameter(description = "중복 확인할 이메일 주소", example = "test@example.com")
+            @Email @RequestParam String email) {
         memberService.validateDuplicatedEmail(email);
         return ResponseEntity.ok().body(ApiResponse.createSuccessWithNoContent());
     }
 
+    @Operation(
+            summary = "회원가입",
+            description = "새로운 회원을 등록하고 JWT 토큰을 반환합니다."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "회원가입 성공",
+                    content = @Content(schema = @Schema(implementation = JwtTokenResponseDto.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청 데이터"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "이미 존재하는 이메일"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류")
+    })
     @ResponseStatus(HttpStatus.CREATED)
     @PostMapping("/signup")
     public ApiResponse<JwtTokenResponseDto> signUp(@Valid @RequestBody SignUpRequest request)
@@ -67,6 +96,16 @@ public class AuthController {
         return ApiResponse.createSuccess(tokenDto);
     }
 
+    @Operation(
+            summary = "약관 동의",
+            description = "회원가입 후 필수 및 선택 약관에 동의합니다."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "약관 동의 완료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청 데이터"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증되지 않은 사용자"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류")
+    })
     @PostMapping("/signup/terms")
     public ApiResponse<Void> agreeTerms(@UserContext MemberDto memberDto,
                                         @RequestBody List<TermAgreementRequest> agreements) {
@@ -79,6 +118,15 @@ public class AuthController {
         return ApiResponse.createSuccessWithNoContent();
     }
 
+    @Operation(
+            summary = "회원가입 취소",
+            description = "회원가입을 취소하고 등록된 회원 정보를 삭제합니다."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "회원가입 취소 완료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증되지 않은 사용자"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류")
+    })
     @DeleteMapping("/signup")
     public ApiResponse<Void> cancelSignUp(@UserContext MemberDto memberDto) {
         memberService.deleteByMemberId(memberDto.getMemberId());
